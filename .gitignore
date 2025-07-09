@@ -7,4 +7,7 @@ __pycache__/
 *.pyz
 *.pywz
 *.pyzw
-*.pyzwz
+*.pyzwzvenv/
+__pycache__/
+*.pyc
+.DS_Store
