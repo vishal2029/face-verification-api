@@ -3,7 +3,6 @@ import numpy as np
 import os
 import requests
 from deepface import DeepFace
-from startup import get_arcface_model
 
 CONFIG = {
     "NUM_FRAMES": 10,
@@ -12,68 +11,58 @@ CONFIG = {
     "FLIP_FALLBACK_ENABLED": True
 }
 
-def extract_frames_from_video_url(video_url: str) -> list:
+def download_image_from_url(url):
     try:
-        response = requests.get(video_url, timeout=20)
-        if response.status_code != 200:
-            return []
+        resp = requests.get(url)
+        arr = np.frombuffer(resp.content, np.uint8)
+        img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+        return img
+    except:
+        return None
 
-        temp_video_path = "temp_video_url.mp4"
-        with open(temp_video_path, "wb") as f:
-            f.write(response.content)
+def download_video_from_url(url):
+    try:
+        resp = requests.get(url)
+        return resp.content
+    except:
+        return None
 
-        cap = cv2.VideoCapture(temp_video_path)
-        if not cap.isOpened():
-            os.remove(temp_video_path)
-            return []
+def extract_frames_from_video(video_bytes: bytes) -> list:
+    temp_video_path = "temp_video.mp4"
+    with open(temp_video_path, "wb") as f:
+        f.write(video_bytes)
 
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        interval = max(total_frames // CONFIG["NUM_FRAMES"], 1)
-        extracted_frames = []
-
-        for i in range(CONFIG["NUM_FRAMES"]):
-            cap.set(cv2.CAP_PROP_POS_FRAMES, i * interval)
-            ret, frame = cap.read()
-            if ret:
-                extracted_frames.append(frame)
-
-        cap.release()
+    cap = cv2.VideoCapture(temp_video_path)
+    if not cap.isOpened():
         os.remove(temp_video_path)
-        return extracted_frames
-
-    except Exception as e:
-        print("Video frame extraction failed:", e)
         return []
 
-def run_face_verification_from_urls(video_frames: list, image_urls: list) -> dict:
-    model = get_arcface_model()
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    interval = max(total_frames // CONFIG["NUM_FRAMES"], 1)
+    extracted_frames = []
 
-    profile_images = []
-    for url in image_urls:
-        try:
-            img_resp = requests.get(url, timeout=10)
-            img_arr = np.frombuffer(img_resp.content, np.uint8)
-            img = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
-            if img is not None:
-                profile_images.append(img)
-        except Exception:
-            continue
+    for i in range(CONFIG["NUM_FRAMES"]):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, i * interval)
+        ret, frame = cap.read()
+        if ret:
+            extracted_frames.append(frame)
 
-    if not profile_images:
-        return {"verified": False, "reason": "No valid images with faces found"}
+    cap.release()
+    os.remove(temp_video_path)
+    return extracted_frames
 
+def run_face_verification(video_frames: list, profile_images: list) -> dict:
     for frame in video_frames:
         for p_image in profile_images:
             try:
                 result = DeepFace.verify(
                     img1_path=frame,
                     img2_path=p_image,
-                    model_name="ArcFace",
-                    model=model,
+                    model_name=CONFIG["MODEL_NAME"],
                     enforce_detection=True
                 )
                 if result["verified"] and result["distance"] < CONFIG["DISTANCE_THRESHOLD"]:
-                    return {"verified": True, "reason": "Match found"}
+                    return {"status": "Successful", "message": "Match found."}
             except Exception:
                 continue
 
@@ -85,13 +74,29 @@ def run_face_verification_from_urls(video_frames: list, image_urls: list) -> dic
                     result = DeepFace.verify(
                         img1_path=frame,
                         img2_path=flipped,
-                        model_name="ArcFace",
-                        model=model,
+                        model_name=CONFIG["MODEL_NAME"],
                         enforce_detection=True
                     )
                     if result["verified"] and result["distance"] < CONFIG["DISTANCE_THRESHOLD"]:
-                        return {"verified": True, "reason": "Match found with flipped image"}
+                        return {"status": "Successful", "message": "Match found with flipped image."}
                 except Exception:
                     continue
 
-    return {"verified": False, "reason": "No match found"}
+    return {"status": "Failed", "message": "No match found."}
+
+def process_verification_from_urls(video_url: str, image_urls: list) -> dict:
+    profile_images = [download_image_from_url(url) for url in image_urls]
+    profile_images = [img for img in profile_images if img is not None]
+
+    if not profile_images:
+        return {"status": "Failed", "message": "No valid images with faces were found."}
+
+    video_bytes = download_video_from_url(video_url)
+    if not video_bytes:
+        return {"status": "Failed", "message": "Could not download video."}
+
+    frames = extract_frames_from_video(video_bytes)
+    if not frames:
+        return {"status": "Failed", "message": "Could not extract frames from video."}
+
+    return run_face_verification(frames, profile_images)

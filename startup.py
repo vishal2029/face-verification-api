@@ -1,11 +1,9 @@
 from deepface import DeepFace
 
-arcface_model = None
-
-def get_arcface_model():
-    global arcface_model
-    if arcface_model is None:
-        print("⚡ Loading ArcFace model...")
-        arcface_model = DeepFace.build_model("ArcFace")
-        print("✅ ArcFace model loaded.")
-    return arcface_model
+def preload_deepface_models():
+    print("⚡ Preloading DeepFace model weights...")
+    try:
+        DeepFace.build_model("ArcFace")
+        print("✅ ArcFace model loaded successfully.")
+    except Exception as e:
+        print("❌ Error loading DeepFace model:", e)
