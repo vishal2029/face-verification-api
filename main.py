@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, HttpUrl
 from typing import List
+from fastapi.responses import PlainTextResponse  # ✅ Required for /healthz
 from startup import preload_deepface_models
 from verification import process_verification_from_urls
 
@@ -30,3 +31,8 @@ async def verify_user_url(request: VerificationRequest):
 @app.get("/", tags=["Health Check"])
 def read_root():
     return {"status": "ok"}
+
+# ✅ Additional Render-compatible health check endpoint
+@app.get("/healthz", include_in_schema=False)
+def healthz():
+    return PlainTextResponse("ok", status_code=200)
