@@ -1,10 +1,10 @@
-from deepface.basemodels import ArcFace
-import os
+from deepface import DeepFace
 
 def preload_deepface_models():
-    print("Preloading deepface models...")
+    print("⚡ Preloading DeepFace model weights...")
     try:
-        ArcFace.loadModel()
+        # This will force downloading the default model (ArcFace) and cache it
+        DeepFace.build_model("ArcFace")
         print("✅ ArcFace model loaded successfully.")
     except Exception as e:
-        print("❌ Error loading ArcFace model:", e)
+        print("❌ Error loading DeepFace model:", e)
