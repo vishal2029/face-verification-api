@@ -3,8 +3,13 @@ from typing import List
 import numpy as np
 import cv2
 from verification import extract_frames_from_video, run_face_verification
+from startup import preload_deepface_models
 
 app = FastAPI(title="Dating App User Verification API")
+
+@app.on_event("startup")
+def startup_event():
+    preload_deepface_models()
 
 @app.post("/verify-user/", tags=["Verification"])
 async def verify_user(

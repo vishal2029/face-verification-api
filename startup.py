@@ -4,7 +4,7 @@ import os
 def preload_deepface_models():
     print("Preloading deepface models...")
     try:
-        model = ArcFace.loadModel()
-        print("ArcFace model loaded successfully.")
+        ArcFace.loadModel()
+        print("✅ ArcFace model loaded successfully.")
     except Exception as e:
-        print("❌ Failed to preload ArcFace model:", e)
+        print("❌ Error loading ArcFace model:", e)
