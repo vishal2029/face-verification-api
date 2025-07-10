@@ -1,40 +1,32 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, HttpUrl
 from typing import List
-import numpy as np
-import cv2
-from verification import extract_frames_from_video, run_face_verification
-from startup import preload_deepface_models
+from verification import extract_frames_from_video_url, run_face_verification_from_urls
 
-app = FastAPI(title="Dating App User Verification API")
+app = FastAPI(title="User Verification via URL")
 
-@app.on_event("startup")
-def startup_event():
-    preload_deepface_models()
+class VerificationRequest(BaseModel):
+    video_url: HttpUrl
+    image_urls: List[HttpUrl]
+    id: str
+    verification_attempt: int
 
-@app.post("/verify-user/", tags=["Verification"])
-async def verify_user(
-    profile_images: List[UploadFile] = File(...),
-    verification_video: UploadFile = File(...)
-):
-    print("Received profile images:", profile_images)
-    # decode and collect profile images
-    imgs = []
-    for file in profile_images:
-        data = await file.read()
-        arr  = np.frombuffer(data, np.uint8)
-        img  = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-        imgs.append(img)
+@app.post("/verify-user-url/", tags=["Verification"])
+async def verify_user_url(payload: VerificationRequest):
+    try:
+        frames = extract_frames_from_video_url(payload.video_url)
+        if not frames:
+            return {"status": "Failed", "message": "No frames extracted from video"}
 
-    # extract frames from uploaded video
-    video_bytes  = await verification_video.read()
-    frames       = extract_frames_from_video(video_bytes)
-    if not frames:
-        raise HTTPException(status_code=400, detail="Could not process video.")
+        result = run_face_verification_from_urls(
+            video_frames=frames,
+            image_urls=payload.image_urls
+        )
+        return {"status": "Success" if result["verified"] else "Failed", "message": result["reason"]}
 
-    # run DeepFace verification
-    result = run_face_verification(video_frames=frames, profile_images=imgs)
-    return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
 @app.get("/", tags=["Health Check"])
-def read_root():
+def health_check():
     return {"status": "ok"}
