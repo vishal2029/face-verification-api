@@ -11,6 +11,7 @@ async def verify_user(
     profile_images: List[UploadFile] = File(...),
     verification_video: UploadFile = File(...)
 ):
+    print("Received profile images:", profile_images)
     # decode and collect profile images
     imgs = []
     for file in profile_images:
