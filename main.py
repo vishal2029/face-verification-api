@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, HttpUrl
 from typing import List
-from fastapi.responses import PlainTextResponse  # ✅ Required for /healthz
+from fastapi.responses import PlainTextResponse
 from startup import preload_deepface_models
 from verification import process_verification_from_urls
 
@@ -20,19 +20,22 @@ def startup_event():
 @app.post("/verify-user-url/")
 async def verify_user_url(request: VerificationRequest):
     try:
+        # Convert Pydantic HttpUrl types to simple strings before passing them
+        # to the backend functions. This is a safer practice.
         result = process_verification_from_urls(
-            video_url=request.video_url,
-            image_urls=request.image_urls
+            video_url=str(request.video_url),
+            image_urls=[str(url) for url in request.image_urls]
         )
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # This top-level catch is a final safety net.
+        print(f"A critical error occurred in the main endpoint: {e}")
+        raise HTTPException(status_code=500, detail="An internal server error occurred.")
 
 @app.get("/", tags=["Health Check"])
 def read_root():
     return {"status": "ok"}
 
-# ✅ Additional Render-compatible health check endpoint
 @app.get("/healthz", include_in_schema=False)
 def healthz():
     return PlainTextResponse("ok", status_code=200)
