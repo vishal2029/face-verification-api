@@ -6,17 +6,20 @@ import onnxruntime
 from sklearn.metrics.pairwise import cosine_similarity
 import tempfile
 import gdown
+import traceback
 
 # --- CONFIGURATION ---
 CONFIG = {
     "NUM_FRAMES": 10,
-    # The SFace model is a lightweight, high-performance face recognition model.
     "SFACE_MODEL_PATH": "face_recognition_sface_2021dec.onnx",
-    # We will use a standard OpenCV face detector.
     "FACE_DETECTOR_PATH": "haarcascade_frontalface_default.xml",
     # Threshold for deciding if two faces are a match. Higher is more similar.
-    "SIMILARITY_THRESHOLD": 0.96, # This is for cosine similarity, adjust as needed.
-    "FLIP_FALLBACK_ENABLED": True
+    "SIMILARITY_THRESHOLD": 0.96,
+    "FLIP_FALLBACK_ENABLED": True,
+    # --- OPTIMIZATION ---
+    # Only try flipping the image if the original similarity is already promising.
+    # A value of 0.6 means "don't bother flipping if the faces are very different".
+    "FLIP_CHECK_THRESHOLD": 0.60
 }
 
 # --- MODEL AND DETECTOR LOADING ---
@@ -61,33 +64,37 @@ def get_face_embedding(image: np.ndarray) -> np.ndarray | None:
     """
     Detects a face in an image, preprocesses it, and returns the SFace embedding.
     """
-    # Convert to grayscale for the detector
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+    try:
+        # Convert to grayscale for the detector
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
 
-    if len(faces) == 0:
-        return None # No face found
+        if len(faces) == 0:
+            return None # No face found
 
-    # Use the largest detected face
-    x, y, w, h = sorted(faces, key=lambda f: f[2]*f[3], reverse=True)[0]
-    face_roi = image[y:y+h, x:x+w]
+        # Use the largest detected face
+        x, y, w, h = sorted(faces, key=lambda f: f[2]*f[3], reverse=True)[0]
+        face_roi = image[y:y+h, x:x+w]
 
-    # Preprocess the face for SFace model (resize and normalize)
-    aligned_face = cv2.resize(face_roi, (112, 112))
-    aligned_face = aligned_face.astype(np.float32) / 255.0
-    aligned_face = (aligned_face - 0.5) / 0.5 # Normalize to [-1, 1]
-    
-    # Reshape for the ONNX model: (Batch, Channels, Height, Width)
-    input_blob = np.expand_dims(aligned_face.transpose(2, 0, 1), axis=0)
+        # Preprocess the face for SFace model (resize and normalize)
+        aligned_face = cv2.resize(face_roi, (112, 112))
+        aligned_face = aligned_face.astype(np.float32) / 255.0
+        aligned_face = (aligned_face - 0.5) / 0.5 # Normalize to [-1, 1]
+        
+        # Reshape for the ONNX model: (Batch, Channels, Height, Width)
+        input_blob = np.expand_dims(aligned_face.transpose(2, 0, 1), axis=0)
 
-    # Get the embedding from the ONNX session
-    input_name = onnx_session.get_inputs()[0].name
-    output_name = onnx_session.get_outputs()[0].name
-    embedding = onnx_session.run([output_name], {input_name: input_blob})[0]
-    
-    return embedding
-
-# --- The rest of your file is largely the same, just calling the new functions ---
+        # Get the embedding from the ONNX session
+        input_name = onnx_session.get_inputs()[0].name
+        output_name = onnx_session.get_outputs()[0].name
+        embedding = onnx_session.run([output_name], {input_name: input_blob})[0]
+        
+        return embedding
+    except Exception:
+        # Catch any unexpected errors during embedding generation
+        print("An unexpected error occurred in get_face_embedding:")
+        traceback.print_exc()
+        return None
 
 def download_image_from_url(url: str):
     try:
@@ -132,28 +139,41 @@ def extract_frames_from_video(video_bytes: bytes) -> list:
     return frames
 
 def run_face_verification(video_frames: list, profile_images: list) -> dict:
-    # Get embeddings for all profile images first
-    profile_embeddings = [get_face_embedding(p_img) for p_img in profile_images]
-    profile_embeddings = [emb for emb in profile_embeddings if emb is not None]
-
-    if CONFIG["FLIP_FALLBACK_ENABLED"]:
-        flipped_images = [cv2.flip(p_img, 1) for p_img in profile_images]
-        flipped_embeddings = [get_face_embedding(f_img) for f_img in flipped_images]
-        profile_embeddings.extend([emb for emb in flipped_embeddings if emb is not None])
-
-    if not profile_embeddings:
-        return {"status": "Failed", "message": "Could not find a face in any profile image."}
-
-    # Check each video frame against all profile embeddings
+    """
+    Iterates through frames and profile images, using the optimized flip logic.
+    """
     for frame in video_frames:
         frame_embedding = get_face_embedding(frame)
         if frame_embedding is None:
             continue
 
-        for p_emb in profile_embeddings:
-            similarity = cosine_similarity(frame_embedding, p_emb)[0][0]
-            if similarity > CONFIG["SIMILARITY_THRESHOLD"]:
-                return {"status": "Successful", "message": f"Match found with similarity {similarity:.2f}"}
+        for p_image in profile_images:
+            # --- STEP 1: Get embedding for the original image ---
+            original_embedding = get_face_embedding(p_image)
+            if original_embedding is None:
+                continue
+
+            # --- STEP 2: Check the original image first ---
+            original_similarity = cosine_similarity(frame_embedding, original_embedding)[0][0]
+
+            if original_similarity > CONFIG["SIMILARITY_THRESHOLD"]:
+                return {"status": "Successful", "message": f"Match found with similarity {original_similarity:.2f}"}
+
+            # --- STEP 3: Decide if a flip check is worthwhile ---
+            # If the original similarity is too low, a flip won't help. Skip it.
+            if original_similarity < CONFIG["FLIP_CHECK_THRESHOLD"]:
+                continue
+
+            # --- STEP 4: If in the "maybe" zone, check the flipped image ---
+            if CONFIG["FLIP_FALLBACK_ENABLED"]:
+                flipped_image = cv2.flip(p_image, 1)
+                flipped_embedding = get_face_embedding(flipped_image)
+                if flipped_embedding is None:
+                    continue
+                
+                flipped_similarity = cosine_similarity(frame_embedding, flipped_embedding)[0][0]
+                if flipped_similarity > CONFIG["SIMILARITY_THRESHOLD"]:
+                    return {"status": "Successful", "message": f"Match found with flipped image similarity {flipped_similarity:.2f}"}
 
     return {"status": "Failed", "message": "No match found."}
 
