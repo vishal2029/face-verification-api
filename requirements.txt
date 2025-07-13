@@ -1,27 +1,25 @@
 # Core Web Framework
 fastapi==0.116.0
-uvicorn==0.35.0
-gunicorn==23.0.0
+uvicorn==0.29.0
+gunicorn==22.0.0
+watchfiles==0.21.0
 
-# Core Face Verification Logic
-deepface==0.0.93
-# Pinned to a version < 2.0 for better compatibility with older libraries
-numpy==1.26.4
-pandas==2.2.2
-
-# Use the headless version for servers (no GUI dependencies)
+# --- THE NEW STACK (No TensorFlow, No DeepFace) ---
+# High-performance engine for running the SFace model
+onnxruntime==1.18.1
+# For image processing (face detection, alignment)
 opencv-python-headless==4.9.0.80
+# For math operations
+numpy==1.26.4
+# For calculating similarity between faces
+scikit-learn==1.5.1
+gdown==5.2.0
+
 
 # For downloading media from URLs
 requests==2.32.3
 
-# TensorFlow CPU Backend (as required by DeepFace)
-# Pinned to a stable TF version for Python 3.10
-tensorflow-cpu==2.15.1
-
-# Dependencies of FastAPI/Pydantic
+# Pydantic and its dependencies
 pydantic==2.11.7
 typing-extensions==4.14.1
-
-# Dependency for Gunicorn
-setuptools
+setuptools==69.5.1

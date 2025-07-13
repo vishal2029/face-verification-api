@@ -1,14 +1,16 @@
-from deepface import DeepFace
+# We now import the new function from our rewritten verification module
+from verification import download_and_load_models
 
-def preload_deepface_models():
+def preload_models():
     """
-    Preloads the specified DeepFace model to avoid delays on the first request.
-    This is updated to preload the lightweight 'SFace' model.
+    This function is called by FastAPI on startup.
+    It ensures our SFace model and face detector are downloaded and
+    loaded into memory before the server starts accepting requests.
     """
-    print("⚡ Preloading DeepFace model weights...")
+    print("⚡ Preloading SFace model and face detector...")
     try:
-        # Changed to SFace to match the new, memory-efficient configuration
-        DeepFace.build_model("SFace")
-        print("✅ SFace model loaded successfully.")
+        download_and_load_models()
+        print("✅ Models loaded successfully.")
     except Exception as e:
-        print(f"❌ Error loading DeepFace model: {e}")
+        print(f"❌ Error loading models: {e}")
+
