@@ -15,7 +15,7 @@ CONFIG = {
     # We will use a standard OpenCV face detector.
     "FACE_DETECTOR_PATH": "haarcascade_frontalface_default.xml",
     # Threshold for deciding if two faces are a match. Higher is more similar.
-    "SIMILARITY_THRESHOLD": 0.85, # This is for cosine similarity, adjust as needed.
+    "SIMILARITY_THRESHOLD": 0.96, # This is for cosine similarity, adjust as needed.
     "FLIP_FALLBACK_ENABLED": True
 }
 
