@@ -10,7 +10,9 @@ CONFIG = {
     "NUM_FRAMES": 10,
     "MODEL_NAME": "ArcFace",
     "DISTANCE_THRESHOLD": 0.40,
-    "FLIP_FALLBACK_ENABLED": True
+    "FLIP_FALLBACK_ENABLED": True,
+    # New threshold to decide if a flip check is even worth trying.
+    "FLIP_CHECK_THRESHOLD": 1.0 
 }
 
 def download_image_from_url(url):
@@ -79,43 +81,52 @@ def extract_frames_from_video(video_bytes: bytes) -> list:
 
 def run_face_verification(video_frames: list, profile_images: list) -> dict:
     """
-    Iterates through frames and profile images to find a match.
-    This version uses enforce_detection=False to prevent crashes.
+    Iterates through frames and profile images, using the optimized flip logic.
     """
-    print("Starting face verification process...")
+    print("Starting face verification process with optimized flip check...")
     for i, frame in enumerate(video_frames):
         for j, p_image in enumerate(profile_images):
-            images_to_check = [(p_image, "original")]
-            if CONFIG["FLIP_FALLBACK_ENABLED"]:
-                flipped_image = cv2.flip(p_image, 1)
-                images_to_check.append((flipped_image, "flipped"))
+            try:
+                # --- STEP 1: Check the original image first ---
+                original_result = DeepFace.verify(
+                    img1_path=frame,
+                    img2_path=p_image,
+                    model_name=CONFIG["MODEL_NAME"],
+                    enforce_detection=False
+                )
 
-            for image_variant, image_type in images_to_check:
-                try:
-                    # --- THE CRITICAL FIX IS HERE ---
-                    # By setting enforce_detection to False, DeepFace will not raise
-                    # an exception if a face is not found. It will simply return
-                    # a result with "verified": False, which prevents a server crash.
-                    result = DeepFace.verify(
+                # --- STEP 2: Check for an immediate match ---
+                if original_result.get("verified") and original_result.get("distance", 1.0) < CONFIG["DISTANCE_THRESHOLD"]:
+                    print(f"Success: Match found on frame {i+1} with original profile image {j+1}.")
+                    return {"status": "Successful", "message": "Match found."}
+
+                # --- STEP 3: Decide if a flip check is worthwhile ---
+                # If the distance is too high, a flip won't help. Skip it to save time.
+                if original_result.get("distance", 1.0) >= CONFIG["FLIP_CHECK_THRESHOLD"]:
+                    continue # Move to the next profile image
+
+                # --- STEP 4: If in the "maybe" zone, check the flipped image ---
+                if CONFIG["FLIP_FALLBACK_ENABLED"]:
+                    flipped_image = cv2.flip(p_image, 1)
+                    flipped_result = DeepFace.verify(
                         img1_path=frame,
-                        img2_path=image_variant,
+                        img2_path=flipped_image,
                         model_name=CONFIG["MODEL_NAME"],
-                        enforce_detection=False  # <-- THIS IS THE FIX
+                        enforce_detection=False
                     )
-                    
-                    if result.get("verified") and result.get("distance", 1.0) < CONFIG["DISTANCE_THRESHOLD"]:
-                        print(f"Success: Match found on frame {i+1} with {image_type} profile image {j+1}.")
-                        return {"status": "Successful", "message": f"Match found with {image_type} image."}
+                    if flipped_result.get("verified") and flipped_result.get("distance", 1.0) < CONFIG["DISTANCE_THRESHOLD"]:
+                        print(f"Success: Match found on frame {i+1} with flipped profile image {j+1}.")
+                        return {"status": "Successful", "message": "Match found with flipped image."}
 
-                except Exception:
-                    # This is now only a safety net for truly unexpected errors.
-                    print("="*20)
-                    print(f"!! A TRULY UNEXPECTED ERROR OCCURRED in DeepFace.verify !!")
-                    traceback.print_exc()
-                    print("="*20)
-                    continue
+            except Exception:
+                # Safety net for any truly unexpected errors
+                print("="*20)
+                print(f"!! An UNEXPECTED ERROR occurred in DeepFace.verify !!")
+                traceback.print_exc()
+                print("="*20)
+                continue
 
-    # If the loops complete without returning, no match was found.
+    # If the loops complete, no match was found.
     print("Verification process completed. No match found.")
     return {"status": "Failed", "message": "No match found."}
 
