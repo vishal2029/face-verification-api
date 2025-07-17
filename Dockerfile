@@ -4,8 +4,10 @@ FROM python:3.10-slim
 # Set the working directory inside the container
 WORKDIR /app
 
-# Install system dependencies needed by opencv-python
-RUN apt-get update && apt-get install -y libgl1
+# --- THE FIX IS HERE ---
+# Install system dependencies needed by opencv-python.
+# We need both libgl1 and the new libglib2.0-0 for threading.
+RUN apt-get update && apt-get install -y libgl1 libglib2.0-0
 
 # Copy the requirements file first to leverage Docker layer caching
 COPY requirements.txt .
@@ -16,9 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of your application code into the container
 COPY . .
 
-# --- THE FIX IS HERE ---
-# Run the startup script during the build process. This downloads the model
-# and caches it within the Docker image itself.
+# Run the startup script during the build process to download and cache the models.
 RUN python -c "from startup import preload_deepface_models; preload_deepface_models()"
 
 # Tell Docker that your application listens on a port
