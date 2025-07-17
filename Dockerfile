@@ -1,5 +1,4 @@
 # Start with an official, lightweight Python base image.
-# This is a Linux environment, just like your Google Cloud VM.
 FROM python:3.10-slim
 
 # Set the working directory inside the container
@@ -15,9 +14,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of your application code into the container
 COPY . .
 
-# Tell Docker that your application listens on port 8080
+# Tell Docker that your application will listen on a port
+# (This is more for documentation; the CMD line is what matters)
 EXPOSE 8080
 
+# --- THE FIX IS HERE ---
 # The command to run when the container starts.
-# This is the same Gunicorn command you used on the server.
-CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "main:app", "--bind", "0.0.0.0:8080", "--timeout", "120"]
+# We now use the $PORT environment variable provided by Cloud Run
+# instead of a hardcoded port.
+CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "main:app", "--bind", "0.0.0.0:$PORT", "--timeout", "120"]
