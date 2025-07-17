@@ -4,25 +4,35 @@ FROM python:3.10-slim
 # Set the working directory inside the container
 WORKDIR /app
 
-# --- THE FIX IS HERE ---
-# Install the full set of system dependencies needed by opencv-python.
-# This is a common requirement for running OpenCV in a minimal container.
-RUN apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0
+# --- THE DEFINITIVE FIX ---
+# Install the full set of common system dependencies needed by OpenCV
+# and other scientific Python libraries in a headless Linux environment.
+# This prevents all the "cannot open shared object file" errors.
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
 
 # Copy the requirements file first to leverage Docker layer caching
 COPY requirements.txt .
 
-# Install the Python dependencies
+# Install the Python dependencies from the minimal, correct list
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of your application code into the container
 COPY . .
 
 # Run the startup script during the build process to download and cache the models.
+# This "bakes" the model into the image so the container starts instantly.
 RUN python -c "from startup import preload_deepface_models; preload_deepface_models()"
 
 # Tell Docker that your application listens on a port
 EXPOSE 8080
 
 # The command to run when the container starts.
+# It uses the $PORT variable required by Cloud Run.
 CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "main:app", "--bind", "0.0.0.0:$PORT", "--timeout", "120"]
