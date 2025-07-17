@@ -4,22 +4,25 @@ FROM python:3.10-slim
 # Set the working directory inside the container
 WORKDIR /app
 
-# Copy the requirements file into the container
+# Install system dependencies needed by opencv-python
+RUN apt-get update && apt-get install -y libgl1
+
+# Copy the requirements file first to leverage Docker layer caching
 COPY requirements.txt .
 
 # Install the Python dependencies
-# We add --no-cache-dir to keep the image size small
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of your application code into the container
 COPY . .
 
-# Tell Docker that your application will listen on a port
-# (This is more for documentation; the CMD line is what matters)
+# --- THE FIX IS HERE ---
+# Run the startup script during the build process. This downloads the model
+# and caches it within the Docker image itself.
+RUN python -c "from startup import preload_deepface_models; preload_deepface_models()"
+
+# Tell Docker that your application listens on a port
 EXPOSE 8080
 
-# --- THE FIX IS HERE ---
 # The command to run when the container starts.
-# We now use the $PORT environment variable provided by Cloud Run
-# instead of a hardcoded port.
 CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "main:app", "--bind", "0.0.0.0:$PORT", "--timeout", "120"]
