@@ -5,9 +5,9 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # --- THE FIX IS HERE ---
-# Install system dependencies needed by opencv-python.
-# We need both libgl1 and the new libglib2.0-0 for threading.
-RUN apt-get update && apt-get install -y libgl1 libglib2.0-0
+# Install the full set of system dependencies needed by opencv-python.
+# This is a common requirement for running OpenCV in a minimal container.
+RUN apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0
 
 # Copy the requirements file first to leverage Docker layer caching
 COPY requirements.txt .
