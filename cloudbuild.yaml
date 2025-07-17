@@ -1,15 +1,15 @@
 steps:
 # Step 1: Build the Docker image using the Dockerfile in the repository
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'us-central1-docker.pkg.dev/<YOUR_PROJECT_ID>/face-api-images/api-server:latest', '.']
+  args: ['build', '-t', 'us-central1-docker.pkg.dev/face-verification-api-465800/face-api-images/api-server:latest', '.']
 
 # Step 2: Push the built image to Google Artifact Registry
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['push', 'us-central1-docker.pkg.dev/<YOUR_PROJECT_ID>/face-api-images/api-server:latest']
+  args: ['push', 'us-central1-docker.pkg.dev/face-verification-api-465800/face-api-images/api-server:latest']
 
 # Tell Cloud Build where to find the final image
 images:
-- 'us-central1-docker.pkg.dev/<YOUR_PROJECT_ID>/face-api-images/api-server:latest'
+- 'us-central1-docker.pkg.dev/face-verification-api-465800/face-api-images/api-server:latest'
 
 # This option prevents the logging permission errors
 options:
