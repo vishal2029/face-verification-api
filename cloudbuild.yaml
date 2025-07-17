@@ -10,3 +10,9 @@ steps:
 # Tell Cloud Build where to find the final image
 images:
 - 'us-central1-docker.pkg.dev/face-verification-api-465800/face-api-images/api-server:latest'
+
+# --- THE FIX IS HERE ---
+# This section explicitly tells Cloud Build how to handle logs,
+# which resolves the permission error.
+options:
+  logging: CLOUD_LOGGING_ONLY
