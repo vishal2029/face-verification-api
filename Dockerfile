@@ -6,8 +6,8 @@ WORKDIR /app
 
 # --- THE DEFINITIVE FIX ---
 # Install the full set of common system dependencies needed by OpenCV
-# and other scientific Python libraries in a headless Linux environment.
-# This prevents all the "cannot open shared object file" errors.
+# in a headless Linux environment. This prevents all the "cannot open
+# shared object file" errors we saw before.
 RUN apt-get update && apt-get install -y \
     libgl1-mesa-glx \
     libglib2.0-0 \
@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y \
 # Copy the requirements file first to leverage Docker layer caching
 COPY requirements.txt .
 
-# Install the Python dependencies from the minimal, correct list
+# Install the Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of your application code into the container
@@ -30,9 +30,8 @@ COPY . .
 # This "bakes" the model into the image so the container starts instantly.
 RUN python -c "from startup import preload_deepface_models; preload_deepface_models()"
 
-# Tell Docker that your application listens on a port
+# Tell Docker that your application listens on port 8080
 EXPOSE 8080
 
-# The command to run when the container starts.
-# It uses the $PORT variable required by Cloud Run.
-CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "main:app", "--bind", "0.0.0.0:$PORT", "--timeout", "120"]
+# The command to run when the container starts. We use a simple bind here.
+CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "main:app", "--bind", "0.0.0.0:8080", "--timeout", "120"]
