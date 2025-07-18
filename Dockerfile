@@ -7,7 +7,7 @@ WORKDIR /app
 # --- THE DEFINITIVE FIX ---
 # Install the full set of common system dependencies needed by OpenCV
 # in a headless Linux environment. This prevents all the "cannot open
-# shared object file" errors we saw before.
+# shared object file" errors.
 RUN apt-get update && apt-get install -y \
     libgl1-mesa-glx \
     libglib2.0-0 \
@@ -33,5 +33,5 @@ RUN python -c "from startup import preload_deepface_models; preload_deepface_mod
 # Tell Docker that your application listens on port 8080
 EXPOSE 8080
 
-# The command to run when the container starts. We use a simple bind here.
+# The command to run when the container starts.
 CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "main:app", "--bind", "0.0.0.0:8080", "--timeout", "120"]
